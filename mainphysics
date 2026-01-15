@@ -1,0 +1,219 @@
+import pygame
+import math
+import random
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+GRAVITY = 0.5        
+BOUNCE_DAMPING = 0.6 
+LAUNCH_SPEED = 18    
+LAUNCH_ANGLE = 60    
+GROUND_HEIGHT = 80   
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (220, 20, 60)       
+HIGHLIGHT = (255, 100, 100) 
+GRASS_TOP = (60, 180, 60)
+DIRT_BROWN = (100, 70, 40)
+BUTTON_COLOR = (50, 80, 120) 
+BUTTON_HOVER = (70, 100, 160)
+SHADOW_COLOR = (30, 30, 30)
+POPUP_BG = (30, 30, 40, 245) 
+
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Physics Project: Projectile Motion")
+clock = pygame.time.Clock()
+
+font_ui = pygame.font.SysFont("arial", 22, bold=True)
+font_popup = pygame.font.SysFont("arial", 20)
+font_title = pygame.font.SysFont("arial", 26, bold=True)
+font_small = pygame.font.SysFont("arial", 16) 
+
+btn_formula_rect = pygame.Rect(20, 20, 100, 35)
+btn_solution_rect = pygame.Rect(WIDTH - 120, 20, 100, 35)
+
+show_formulas = False
+show_solution = False
+
+clouds = []
+for i in range(5):
+    cx = random.randint(50, WIDTH - 50)
+    cy = random.randint(50, 200)
+    clouds.append((cx, cy))
+
+def draw_cloud(x, y):
+    pygame.draw.circle(screen, WHITE, (x, y), 20)
+    pygame.draw.circle(screen, WHITE, (x + 15, y - 10), 25)
+    pygame.draw.circle(screen, WHITE, (x + 30, y), 20)
+
+def draw_gradient_sky():
+    top_c = (100, 190, 255) 
+    bot_c = (200, 240, 255) 
+    for y in range(HEIGHT - GROUND_HEIGHT):
+        ratio = y / (HEIGHT - GROUND_HEIGHT)
+        r = top_c[0] * (1 - ratio) + bot_c[0] * ratio
+        g = top_c[1] * (1 - ratio) + bot_c[1] * ratio
+        b = top_c[2] * (1 - ratio) + bot_c[2] * ratio
+        pygame.draw.line(screen, (int(r), int(g), int(b)), (0, y), (WIDTH, y))
+
+angle_rad = math.radians(LAUNCH_ANGLE)
+vx_px = LAUNCH_SPEED * math.cos(angle_rad)
+vy_px = LAUNCH_SPEED * math.sin(angle_rad)
+THEORETICAL_TIME = ((2 * vy_px) / GRAVITY) / FPS
+
+def reset_ball():
+    x = 50
+    y = HEIGHT - GROUND_HEIGHT - 16
+
+    vx = LAUNCH_SPEED * math.cos(angle_rad)
+    vy = -LAUNCH_SPEED * math.sin(angle_rad)
+    
+    start_time = pygame.time.get_ticks()
+    return [x, y], [vx, vy], start_time, False
+
+ball_pos, ball_vel, start_time, landed = reset_ball()
+ball_radius = 16
+flight_time = 0
+
+running = True
+while running:
+    mouse_pos = pygame.mouse.get_pos()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+            
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if btn_formula_rect.collidepoint(event.pos):
+                show_formulas = not show_formulas
+                show_solution = False 
+            elif btn_solution_rect.collidepoint(event.pos):
+                show_solution = not show_solution
+                show_formulas = False 
+            else:
+                if show_formulas or show_solution:
+                    show_formulas = False
+                    show_solution = False
+                    
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                ball_pos, ball_vel, start_time, landed = reset_ball()
+
+    if not show_formulas and not show_solution:
+        ball_vel[1] += GRAVITY
+        ball_pos[0] += ball_vel[0]
+        ball_pos[1] += ball_vel[1]
+
+        if not landed:
+            flight_time = (pygame.time.get_ticks() - start_time) / 1000.0
+
+        floor_y = HEIGHT - GROUND_HEIGHT
+        if ball_pos[1] + ball_radius >= floor_y:
+            if not landed:
+                landed = True
+                flight_time = THEORETICAL_TIME
+            
+            ball_pos[1] = floor_y - ball_radius 
+            ball_vel[1] = -ball_vel[1] * BOUNCE_DAMPING 
+            
+            if abs(ball_vel[1]) < 2: 
+                ball_vel[1] = 0
+                ball_vel[0] *= 0.92 
+
+        if ball_pos[0] + ball_radius > WIDTH:
+            ball_pos[0] = WIDTH - ball_radius
+            ball_vel[0] = -ball_vel[0] * 0.7
+        if ball_pos[0] - ball_radius < 0:
+            ball_pos[0] = ball_radius
+            ball_vel[0] = -ball_vel[0] * 0.7
+
+    draw_gradient_sky()
+    
+    for cx, cy in clouds:
+        draw_cloud(cx, cy)
+
+    pygame.draw.rect(screen, DIRT_BROWN, (0, HEIGHT - GROUND_HEIGHT + 10, WIDTH, GROUND_HEIGHT - 10))
+    pygame.draw.rect(screen, GRASS_TOP, (0, HEIGHT - GROUND_HEIGHT, WIDTH, 15), border_radius=5)
+
+    pygame.draw.circle(screen, BLACK, (int(ball_pos[0]), int(ball_pos[1]) + 2), ball_radius)
+    pygame.draw.circle(screen, RED, (int(ball_pos[0]), int(ball_pos[1])), ball_radius)
+    pygame.draw.circle(screen, HIGHLIGHT, (int(ball_pos[0] - 5), int(ball_pos[1] - 5)), 5)
+
+    pygame.draw.rect(screen, SHADOW_COLOR, (btn_formula_rect.x + 2, btn_formula_rect.y + 2, 100, 35), border_radius=6)
+    c_f = BUTTON_HOVER if btn_formula_rect.collidepoint(mouse_pos) else BUTTON_COLOR
+    pygame.draw.rect(screen, c_f, btn_formula_rect, border_radius=6)
+    pygame.draw.rect(screen, WHITE, btn_formula_rect, 2, border_radius=6)
+    screen.blit(font_ui.render("Formula", True, WHITE), (btn_formula_rect.x + 13, btn_formula_rect.y + 5))
+
+    pygame.draw.rect(screen, SHADOW_COLOR, (btn_solution_rect.x + 2, btn_solution_rect.y + 2, 100, 35), border_radius=6)
+    c_s = BUTTON_HOVER if btn_solution_rect.collidepoint(mouse_pos) else BUTTON_COLOR
+    pygame.draw.rect(screen, c_s, btn_solution_rect, border_radius=6)
+    pygame.draw.rect(screen, WHITE, btn_solution_rect, 2, border_radius=6)
+    screen.blit(font_ui.render("Solution", True, WHITE), (btn_solution_rect.x + 10, btn_solution_rect.y + 5))
+    
+    timer_bg_rect = pygame.Rect(WIDTH//2 - 60, 20, 120, 30)
+    s = pygame.Surface((120, 30), pygame.SRCALPHA)
+    s.fill((0, 0, 0, 150))
+    screen.blit(s, (WIDTH//2 - 60, 20))
+    
+    timer_color = WHITE if not landed else (255, 200, 200)
+    timer_text = font_ui.render(f"{flight_time:.2f} s", True, timer_color)
+    t_rect = timer_text.get_rect(center=(WIDTH//2, 35))
+    screen.blit(timer_text, t_rect)
+
+    reset_surf = font_small.render("Press SPACE to reset", True, (50, 50, 50))
+    screen.blit(reset_surf, (10, HEIGHT - 25))
+
+    if show_formulas:
+        s = pygame.Surface((400, 260), pygame.SRCALPHA)
+        s.fill(POPUP_BG)
+        screen.blit(s, (WIDTH//2 - 200, HEIGHT//2 - 130))
+        pygame.draw.rect(screen, WHITE, (WIDTH//2 - 200, HEIGHT//2 - 130, 400, 260), 2)
+
+        lines = [
+            ("PHYSICS FORMULAS", font_title),
+            ("", font_popup),
+            ("Vy = V * sin(angle)", font_popup),
+            ("Vx = V * cos(angle)", font_popup),
+            ("Time = 2 * Vy / g", font_popup),
+            ("Dist = Vx * Time", font_popup)
+        ]
+        y_off = HEIGHT//2 - 90
+        for text, fnt in lines:
+            surf = fnt.render(text, True, WHITE)
+            rect = surf.get_rect(center=(WIDTH//2, y_off))
+            screen.blit(surf, rect)
+            y_off += 35
+
+    if show_solution:
+        calc_dist = vx_px * (THEORETICAL_TIME * FPS) 
+        calc_height = (vy_px ** 2) / (2 * GRAVITY)
+
+        s = pygame.Surface((400, 280), pygame.SRCALPHA)
+        s.fill(POPUP_BG)
+        screen.blit(s, (WIDTH//2 - 200, HEIGHT//2 - 140))
+        pygame.draw.rect(screen, WHITE, (WIDTH//2 - 200, HEIGHT//2 - 140, 400, 280), 2)
+
+        lines = [
+            ("CALCULATED RESULTS", font_title),
+            ("", font_popup),
+            (f"Speed: {LAUNCH_SPEED} m/s | Angle: {LAUNCH_ANGLE}°", font_popup),
+            ("-----------------------------", font_popup),
+            (f"Total Time: {THEORETICAL_TIME:.2f} s", font_popup),
+            (f"Max Height: {calc_height:.2f} cm", font_popup),
+            (f"Distance: {calc_dist:.2f} cm", font_popup),
+            ("", font_popup),
+            ("(Theoretical values)", font_small)
+        ]
+        
+        y_off = HEIGHT//2 - 110
+        for text, fnt in lines:
+            surf = fnt.render(text, True, WHITE)
+            rect = surf.get_rect(center=(WIDTH//2, y_off))
+            screen.blit(surf, rect)
+            y_off += 30
+
+    pygame.display.flip() 
+    clock.tick(FPS)       
+
+pygame.quit()
